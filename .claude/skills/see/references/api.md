@@ -1,6 +1,6 @@
 # S.EE REST API Reference
 
-This file is generated from `see_api_doc.json`; do not edit it manually.
+This reference summarizes the official S.EE REST API for agent integrations.
 
 - Base URL: `https://s.ee`
 - API prefix: `/api/v1`

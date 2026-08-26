@@ -4,8 +4,7 @@ This repository packages the S.EE integration guidance as a portable Agent Skill
 
 ## Commands
 
-- `make generate`: regenerate the REST reference from the Swagger source.
-- `make check`: regenerate and run all offline validation. Run this after every source or documentation change.
+- `make check`: run all offline validation. Run this after every source or documentation change.
 - `make package`: validate and create `dist/see-agent-skill.zip`.
 - `make clean`: remove generated build artifacts and Python bytecode.
 
@@ -13,17 +12,16 @@ The scripts use Python's standard library. Do not add dependencies unless the ta
 
 ## Source Boundaries
 
-- [see_api_doc.json](see_api_doc.json) is the source of truth for REST paths, request fields, and response schemas.
-- [.claude/skills/see/references/api.md](.claude/skills/see/references/api.md) is generated. Never edit it directly; update the Swagger input or [scripts/generate_api_reference.py](scripts/generate_api_reference.py), then run `make generate`.
+- `api.md`, `cli.md`, and `sdks.md` are the maintained sources for REST, CLI, and SDK guidance.
 - [.claude/skills/see/SKILL.md](.claude/skills/see/SKILL.md) contains discovery metadata and the main execution workflow. Keep its body concise and move detailed guidance into linked files under `.claude/skills/see/references/`.
-- `cli.md`, `examples.md`, `safety.md`, and `sdks.md` are maintained manually.
+- `examples.md` and `safety.md` contain cross-cutting workflows and safety policy.
 - `dist/` and `__pycache__/` are disposable generated outputs.
 
 ## Change Workflow
 
 1. Make the smallest change at the owning source boundary.
 2. Update manual references only when behavior or agent guidance changes.
-3. Run `make check`; inspect generated changes when the Swagger or generator changed.
+3. Run `make check` after every source or documentation change.
 4. Run `make package` only when a distributable archive is needed.
 
 Keep examples deterministic and use placeholders. Preserve the existing Markdown, Python, shell, Makefile, and YAML style defined by [.editorconfig](.editorconfig).

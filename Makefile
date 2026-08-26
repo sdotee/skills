@@ -1,16 +1,10 @@
 PYTHON ?= python3
-SPEC := see_api_doc.json
-SKILL_DIR := .claude/skills/see
-API_REFERENCE := $(SKILL_DIR)/references/api.md
 
-.PHONY: all generate check package clean
+.PHONY: all check package clean
 
 all: check
 
-generate:
-	$(PYTHON) scripts/generate_api_reference.py $(SPEC) $(API_REFERENCE)
-
-check: generate
+check:
 	$(PYTHON) scripts/validate.py
 
 package: check

@@ -15,7 +15,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - name: Validate generated docs and skill
+      - name: Validate skill sources
         run: make check
       - name: Build portable archive
         run: make package

@@ -3,7 +3,6 @@
 
 from __future__ import annotations
 
-import json
 import re
 import sys
 from pathlib import Path
@@ -13,8 +12,9 @@ ROOT = Path(__file__).resolve().parent.parent
 SKILL = ROOT / ".claude" / "skills" / "see"
 SKILL_MD = SKILL / "SKILL.md"
 API_REFERENCE = SKILL / "references" / "api.md"
-SPEC = ROOT / "see_api_doc.json"
-HTTP_METHODS = {"get", "put", "post", "delete", "patch", "head", "options"}
+CLI_REFERENCE = SKILL / "references" / "cli.md"
+SDK_REFERENCE = SKILL / "references" / "sdks.md"
+HTTP_METHODS = {"GET", "PUT", "POST", "DELETE", "PATCH", "HEAD", "OPTIONS"}
 
 
 def fail(message: str) -> None:
@@ -49,29 +49,52 @@ def validate_skill() -> None:
     if unexpected:
         fail(f"non-portable frontmatter keys: {sorted(unexpected)}")
 
-    for link in re.findall(r"\[[^]]+\]\(([^)]+)\)", text):
-        if "://" not in link and not (SKILL / link).is_file():
-            fail(f"broken SKILL.md link: {link}")
+    for source in SKILL.rglob("*.md"):
+        for link in re.findall(r"\[[^]]+\]\(([^)]+)\)", source.read_text(encoding="utf-8")):
+            target = link.split("#", 1)[0]
+            if target and "://" not in target and not (source.parent / target).is_file():
+                fail(f"broken link in {source.relative_to(ROOT)}: {link}")
 
 
 def validate_api_reference() -> None:
-    with SPEC.open(encoding="utf-8") as source:
-        spec = json.load(source)
-    if spec.get("swagger") != "2.0":
-        fail("see_api_doc.json must be Swagger 2.0")
-    expected = {
-        (method.upper(), path)
-        for path, path_item in spec.get("paths", {}).items()
-        for method in path_item
-        if method.lower() in HTTP_METHODS
-    }
-    generated = API_REFERENCE.read_text(encoding="utf-8")
-    actual = set(re.findall(r"^### `([A-Z]+) ([^`]+)`$", generated, flags=re.MULTILINE))
-    if actual != expected:
-        missing = sorted(expected - actual)
-        extra = sorted(actual - expected)
-        fail(f"API reference mismatch; missing={missing}, extra={extra}")
-    print(f"validated {len(actual)} API operations")
+    text = API_REFERENCE.read_text(encoding="utf-8")
+    operations = re.findall(r"^### `([A-Z]+) ([^`]+)`$", text, flags=re.MULTILINE)
+    if not operations:
+        fail("API reference contains no operations")
+    invalid = [(method, path) for method, path in operations if method not in HTTP_METHODS or not path.startswith("/")]
+    if invalid:
+        fail(f"invalid API operations: {invalid}")
+    if len(operations) != len(set(operations)):
+        fail("API reference contains duplicate operations")
+    for required in ("https://s.ee", "/api/v1", "Authorization: Bearer $SEE_API_KEY"):
+        if required not in text:
+            fail(f"API reference is missing {required!r}")
+    print(f"validated {len(operations)} API operations")
+
+
+def validate_cli_reference() -> None:
+    text = CLI_REFERENCE.read_text(encoding="utf-8")
+    commands = re.findall(r"^see (?:[a-z][a-z0-9-]*)(?: [^\n]+)?$", text, flags=re.MULTILINE)
+    if not commands:
+        fail("CLI reference contains no commands")
+    if not any("--json" in command for command in commands):
+        fail("CLI reference does not document JSON output")
+    for section in ("Short URLs", "Text Sharing", "Files", "Bio Pages", "QR Codes", "Result Handling"):
+        if f"## {section}" not in text:
+            fail(f"CLI reference is missing the {section!r} section")
+    print(f"validated {len(commands)} CLI commands")
+
+
+def validate_sdk_reference() -> None:
+    text = SDK_REFERENCE.read_text(encoding="utf-8")
+    repositories = re.findall(r"https://github\.com/sdotee/(sdk\.[a-z]+)", text)
+    if not repositories:
+        fail("SDK reference contains no official repositories")
+    if len(repositories) != len(set(repositories)):
+        fail("SDK reference contains duplicate repositories")
+    if "## Integration Rules" not in text or "SEE_API_KEY" not in text:
+        fail("SDK reference is missing integration or credential guidance")
+    print(f"validated {len(repositories)} SDK repositories")
 
 
 def validate_repository() -> None:
@@ -99,6 +122,8 @@ def validate_repository() -> None:
 def main() -> None:
     validate_skill()
     validate_api_reference()
+    validate_cli_reference()
+    validate_sdk_reference()
     validate_repository()
     print("skill validation passed")
 
