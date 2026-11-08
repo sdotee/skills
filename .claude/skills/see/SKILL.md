@@ -5,7 +5,7 @@ license: MIT
 compatibility: "Works with Claude Code and Agent Skills-compatible agents. The preferred path requires the see CLI and SEE_API_KEY; REST fallback requires an HTTP client."
 metadata:
   author: sdotee
-  version: "1.0.0"
+  version: "1.1.0"
   homepage: "https://s.ee/docs/developers/"
 ---
 
@@ -33,18 +33,20 @@ command -v see
 test -n "$SEE_API_KEY"
 ```
 
-Install on macOS when needed:
+If it is missing, ask before installing. On macOS:
 
 ```bash
 brew tap sdotee/homebrew-tap
 brew install see
 ```
 
+For Linux packages and repositories, AUR, Termux, Windows, and `go install`, see the Install section of [references/cli.md](references/cli.md#install). Guidance here matches CLI v1.4.2; check `see version` when behavior differs.
+
 Configuration variables:
 
 - `SEE_API_KEY`: required API token.
 - `SEE_BASE_URL`: optional API base URL override.
-- `SEE_TIMEOUT`: optional request timeout.
+- `SEE_TIMEOUT`: optional request timeout in whole seconds, such as `30`. The `--timeout` flag instead takes a duration such as `30s`.
 
 The official production API base is `https://s.ee/api/v1`. The authorization header is `Authorization: Bearer $SEE_API_KEY`.
 
@@ -60,15 +62,16 @@ The official production API base is `https://s.ee/api/v1`. The authorization hea
 
 1. Resolve available domains first when the user did not provide one: `see domains --json`, `see text domains --json`, or `see file domains --json`.
 2. Gather every required value. Do not invent domains, slugs, IDs, expiration timestamps, titles, passwords, or file paths.
-3. Run one operation with `--json` and parse its top-level status fields.
-4. Treat success as an HTTP/response `code` of `200` unless the operation documents `204` (TUS chunk/status/cancel behavior).
-5. Return the useful result, such as `short_url`, file `url`, QR asset URLs, visit count, or upload progress. Omit credentials and internal secrets.
+3. Run one operation with `--json`.
+4. For the CLI, a non-zero exit status means failure and the error is on stderr. Create, list, and lookup commands print only the `data` object; update and delete commands print the full response with `code` and `message`. See Result Handling in [references/cli.md](references/cli.md#result-handling).
+5. For REST, treat success as an HTTP/response `code` of `200` unless the operation documents `204` (TUS chunk/status/cancel behavior).
+6. Return the useful result, such as `short_url`, file `url`, QR asset URLs, visit count, or upload progress. Omit credentials and internal secrets.
 
 ## Important API Details
 
 - Simple-mode shortening uses query parameter `signature`; all other authenticated operations use the `Authorization` header.
 - Creating a short URL by JSON requires both `domain` and `target_url`, even though `domain` has a documented default.
-- Text creation requires `content` and `title`; `text_type` is `plain_text`, `source_code`, or `markdown`.
+- Text creation requires `content` and `title`; `text_type` is `plain_text`, `source_code`, or `markdown`. The CLI falls back to the title `Untitled` on create, but `see text update` requires `--title`.
 - Files at or below 100 MB use multipart upload in the CLI. Seekable files above 100 MB automatically use resumable TUS, up to 5 GB.
 - A private-file download URL is temporary, normally about one hour.
 - Updating Bio Page links replaces the complete custom-link list when links are supplied.

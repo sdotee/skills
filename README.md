@@ -6,7 +6,17 @@ The skill covers short URLs, text sharing, small and resumable file uploads, pri
 
 ## Install
 
-Install as a personal Claude Code skill:
+Install with the [`skills`](https://www.npmjs.com/package/skills) CLI (requires Node.js):
+
+```bash
+npx skills add sdotee/skills              # current project, choose agents interactively
+npx skills add sdotee/skills -g           # all projects (user level)
+npx skills add sdotee/skills -a claude-code -y
+```
+
+Update later with `npx skills update`, or remove with `npx skills remove see`.
+
+Without Node.js, clone this repository and install as a personal Claude Code skill:
 
 ```bash
 ./scripts/install.sh
@@ -36,6 +46,8 @@ brew tap sdotee/homebrew-tap
 brew install see
 export SEE_API_KEY='...'
 ```
+
+The CLI is also available from the xTom APT/DNF repository, the AUR, release packages for Linux and Termux, and `go install github.com/sdotee/cli@latest`. See the [CLI README](https://github.com/sdotee/cli#install) for every method.
 
 Never commit the token. `SEE_BASE_URL` and `SEE_TIMEOUT` are optional CLI overrides.
 
