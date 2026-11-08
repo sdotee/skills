@@ -11,15 +11,15 @@ jobs:
   skill:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.11"
       - name: Validate skill sources
         run: make check
       - name: Build portable archive
         run: make package
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: see-agent-skill
           path: dist/see-agent-skill.zip
