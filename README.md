@@ -16,16 +16,16 @@ npx skills add sdotee/skills -a claude-code -y
 
 Update later with `npx skills update`, or remove with `npx skills remove see`.
 
-Without Node.js, clone this repository and install as a personal Claude Code skill:
+Without Node.js, clone this repository and run the installer. It copies the skill to the generic Agent Skills directory `~/.agents/skills/see` and symlinks `~/.claude/skills/see` to it for Claude Code:
 
 ```bash
 ./scripts/install.sh
 ```
 
-Install into a specific Agent Skills directory:
+Pass custom directories as `AGENTS_SKILLS_DIR` and `CLAUDE_SKILLS_DIR`:
 
 ```bash
-./scripts/install.sh ~/.agents/skills
+./scripts/install.sh ~/.agents/skills ~/.claude/skills
 ```
 
 Or copy `.claude/skills/see` to one of these locations:

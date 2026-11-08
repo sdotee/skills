@@ -15,6 +15,14 @@ API_REFERENCE = SKILL / "references" / "api.md"
 CLI_REFERENCE = SKILL / "references" / "cli.md"
 SDK_REFERENCE = SKILL / "references" / "sdks.md"
 HTTP_METHODS = {"GET", "PUT", "POST", "DELETE", "PATCH", "HEAD", "OPTIONS"}
+# Top-level keys defined by the Agent Skills specification.
+PORTABLE_KEYS = {"name", "description", "license", "compatibility", "metadata", "allowed-tools"}
+SKIPPED_PARTS = {".git", "dist", "__pycache__"}
+LINK_PATTERN = re.compile(r"\[[^]]*\]\(([^)\s]+)(?:\s+\"[^\"]*\")?\)")
+CREDENTIAL_PATTERNS = [
+    re.compile(r"(?i)\bbearer\s+(?!\$)[A-Za-z0-9._~+/-]{20,}"),
+    re.compile(r"(?i)(see_api_key|api[_-]?key|authorization)[\"']?\s*[:=]\s*[\"']?(?!bearer\b|\$|\.\.\.)[A-Za-z0-9_-]{20,}"),
+]
 
 
 def fail(message: str) -> None:
@@ -25,10 +33,10 @@ def fail(message: str) -> None:
 def parse_frontmatter(text: str) -> dict[str, str]:
     if not text.startswith("---\n"):
         fail("SKILL.md must begin with YAML frontmatter")
-    try:
-        block = text.split("---\n", 2)[1]
-    except IndexError:
+    match = re.match(r"---\n(.*?)\n---\n", text, flags=re.DOTALL)
+    if not match:
         fail("SKILL.md frontmatter is not closed")
+    block = match.group(1)
     values: dict[str, str] = {}
     for line in block.splitlines():
         match = re.match(r"^([a-z][a-z0-9-]*):\s*(.*)$", line)
@@ -37,23 +45,66 @@ def parse_frontmatter(text: str) -> dict[str, str]:
     return values
 
 
+def heading_anchors(path: Path) -> set[str]:
+    """Return GitHub-style heading anchors, ignoring fenced code blocks."""
+    anchors: set[str] = set()
+    counts: dict[str, int] = {}
+    in_fence = False
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if line.lstrip().startswith("```"):
+            in_fence = not in_fence
+            continue
+        heading = None if in_fence else re.match(r"^#{1,6}\s+(.+?)\s*#*\s*$", line)
+        if not heading:
+            continue
+        slug = re.sub(r"[^\w\- ]", "", heading.group(1).strip().lower()).replace(" ", "-")
+        count = counts.get(slug, 0)
+        counts[slug] = count + 1
+        anchors.add(slug if count == 0 else f"{slug}-{count}")
+    return anchors
+
+
+def iter_files(pattern: str) -> list[Path]:
+    return sorted(
+        path for path in ROOT.rglob(pattern)
+        if path.is_file() and not SKIPPED_PARTS.intersection(path.relative_to(ROOT).parts)
+    )
+
+
+def validate_links() -> None:
+    for source in iter_files("*.md"):
+        text = re.sub(r"^```.*?^```", "", source.read_text(encoding="utf-8"), flags=re.MULTILINE | re.DOTALL)
+        for link in LINK_PATTERN.findall(text):
+            if re.match(r"^[a-z][a-z0-9+.-]*:", link, flags=re.IGNORECASE):
+                continue
+            target, _, anchor = link.partition("#")
+            resolved = (source.parent / target).resolve() if target else source.resolve()
+            if not resolved.is_file():
+                fail(f"broken link in {source.relative_to(ROOT)}: {link}")
+            if source.is_relative_to(SKILL) and not resolved.is_relative_to(SKILL):
+                fail(f"skill link leaves the skill directory in {source.relative_to(ROOT)}: {link}")
+            if anchor and resolved.suffix == ".md" and anchor not in heading_anchors(resolved):
+                fail(f"broken anchor in {source.relative_to(ROOT)}: {link}")
+
+
 def validate_skill() -> None:
     text = SKILL_MD.read_text(encoding="utf-8")
     metadata = parse_frontmatter(text)
-    if metadata.get("name") != SKILL.name:
+    name = metadata.get("name", "")
+    if name != SKILL.name:
         fail("skill name must match its directory")
-    if not metadata.get("description") or len(metadata["description"]) > 1024:
+    if len(name) > 64 or not re.fullmatch(r"[a-z0-9]+(-[a-z0-9]+)*", name):
+        fail("skill name must be 1..64 lowercase letters, digits, and single hyphens")
+    description = metadata.get("description", "")
+    if description[:1] in {">", "|"}:
+        fail("description must be a single-line string")
+    if not description or len(description) > 1024:
         fail("description must contain 1..1024 characters")
-    allowed = {"name", "description", "license", "compatibility", "metadata", "author", "version", "homepage"}
-    unexpected = set(metadata) - allowed
+    if len(metadata.get("compatibility", "")) > 500:
+        fail("compatibility must contain at most 500 characters")
+    unexpected = set(metadata) - PORTABLE_KEYS
     if unexpected:
         fail(f"non-portable frontmatter keys: {sorted(unexpected)}")
-
-    for source in SKILL.rglob("*.md"):
-        for link in re.findall(r"\[[^]]+\]\(([^)]+)\)", source.read_text(encoding="utf-8")):
-            target = link.split("#", 1)[0]
-            if target and "://" not in target and not (source.parent / target).is_file():
-                fail(f"broken link in {source.relative_to(ROOT)}: {link}")
 
 
 def validate_api_reference() -> None:
@@ -101,6 +152,8 @@ def validate_repository() -> None:
     required = [
         ROOT / "README.md",
         ROOT / "LICENSE",
+        SKILL_MD,
+        API_REFERENCE,
         SKILL / "references" / "cli.md",
         SKILL / "references" / "sdks.md",
         SKILL / "references" / "safety.md",
@@ -109,22 +162,22 @@ def validate_repository() -> None:
     missing = [str(path.relative_to(ROOT)) for path in required if not path.is_file()]
     if missing:
         fail(f"missing required files: {missing}")
-    token_pattern = re.compile(r"(?i)(see_api_key|authorization)\s*[:=]\s*['\"]?(?!bearer|\.\.\.)[A-Za-z0-9_-]{20,}")
-    for path in ROOT.rglob("*"):
-        if not path.is_file() or ".git" in path.parts or "dist" in path.parts:
-            continue
-        if path.suffix not in {".md", ".json", ".py", ".sh"}:
-            continue
-        if token_pattern.search(path.read_text(encoding="utf-8", errors="ignore")):
+
+def validate_credentials() -> None:
+    for path in iter_files("*"):
+        text = path.read_text(encoding="utf-8", errors="ignore")
+        if any(pattern.search(text) for pattern in CREDENTIAL_PATTERNS):
             fail(f"possible credential in {path.relative_to(ROOT)}")
 
 
 def main() -> None:
+    validate_repository()
     validate_skill()
+    validate_links()
     validate_api_reference()
     validate_cli_reference()
     validate_sdk_reference()
-    validate_repository()
+    validate_credentials()
     print("skill validation passed")
 
 
